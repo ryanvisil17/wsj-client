@@ -905,7 +905,7 @@ def create_torrent_client(
             f"Supported: {supported}"
         )
 
-    return client_class(url=url, username=username, password=password)
+    return client_class(base_url=url, username=username, password=password)
 
 
 def main() -> None:
