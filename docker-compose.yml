@@ -1,0 +1,264 @@
+# =============================================================================
+# WSJ Client - Multi-Torrent-Client Support
+# =============================================================================
+#
+# This compose file supports 5 torrent clients:
+#   - rTorrent (enabled by default)
+#   - qBittorrent
+#   - Transmission
+#   - Deluge
+#   - aria2
+#
+# All clients run behind the VPN for security.
+#
+# To switch clients:
+#   1. Comment out the current client service
+#   2. Uncomment your preferred client service
+#   3. Set TORRENT_CLIENT=<client> in .env
+#   4. Uncomment the appropriate port in vpn.ports section
+#   5. Run: docker compose up -d nginx
+#
+# Example - Switch to qBittorrent:
+#   - Comment out 'rtorrent' service
+#   - Uncomment 'qbittorrent' service
+#   - Set TORRENT_CLIENT=qbittorrent in .env
+#   - Uncomment port 8080 in vpn.ports
+#   - docker compose up -d nginx
+#
+# =============================================================================
+
+networks:
+  nginx:
+    driver: bridge
+
+services:
+  wsj:
+    container_name: wsj-client
+    build: .
+    networks:
+      - nginx
+    env_file: .env
+    command:
+      [
+        "Wall Street Journal 2026",
+        "Wall Street Journal Saturday February 7, 2026",
+      ]
+
+  # ===================================================================================
+  # Nginx Reverse Proxy (RECOMMENDED for secure remote access)
+  #
+  # Benefits:
+  #   Single port exposure (80 or 443)
+  #   HTTP Basic Auth protection for all clients
+  #   SSL/TLS termination (if configured)
+  #   Rate limiting and security headers
+  #   Access logging
+  #
+  # Access URLs (when nginx is configured):
+  #   - http://localhost/              → rTorrent/ruTorrent
+  #   - http://localhost/qbittorrent/  → qBittorrent
+  #   - http://localhost/transmission/ → Transmission
+  #   - http://localhost/deluge/       → Deluge
+  #   - http://localhost/aria2/        → aria2
+  #
+  # See nginx/nginx.conf for configuration
+  # ===================================================================================
+  nginx:
+    container_name: nginx
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      torrent:
+        condition: service_healthy
+    networks:
+      - nginx
+    ports:
+      - 80:80
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
+    healthcheck:
+      test: ["CMD-SHELL", "nginx -t && kill -0 $(cat /tmp/nginx.pid)"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 10s
+
+  # ==========================================
+  # ruTorrent (Web UI: http://localhost:8080)
+  # Set TORRENT_CLIENT=rtorrent in .env
+  # ==========================================
+  torrent:
+    container_name: rtorrent
+    image: crazymax/rtorrent-rutorrent:latest
+    restart: unless-stopped
+    network_mode: "service:vpn"
+    depends_on:
+      vpn:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      RT_LOG_LEVEL: info
+      MEMORY_LIMIT: 768M
+      XMLRPC_PORT: 18000
+    volumes:
+      - ./clients/rtorrent/data:/data
+      - ./clients/rtorrent/downloads:/downloads
+      - ./clients/rtorrent/passwd/:/passwd
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ==========================================
+  # Optional: qBittorrent (Web UI: http://localhost:8080)
+  # Uncomment to use qBittorrent instead of rTorrent
+  # Set TORRENT_CLIENT=qbittorrent in .env
+  # ==========================================
+  # torrent:
+  #   container_name: qbittorrent
+  #   image: lscr.io/linuxserver/qbittorrent:latest
+  #   restart: unless-stopped
+  #   network_mode: "service:vpn"
+  #   depends_on:
+  #     vpn:
+  #       condition: service_healthy
+  #   env_file: .env
+  #   environment:
+  #     WEBUI_PORT: 8080
+  #   volumes:
+  #     - ./clients/qbittorrent/config:/config
+  #     - ./clients/qbittorrent/downloads:/downloads
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 30s
+
+  # ==========================================
+  # Optional: Transmission (Web UI: http://localhost:9091)
+  # Uncomment to use Transmission instead of rTorrent
+  # Set TORRENT_CLIENT=transmission in .env
+  # ==========================================
+  # torrent:
+  #   container_name: transmission
+  #   image: lscr.io/linuxserver/transmission:latest
+  #   restart: unless-stopped
+  #   network_mode: "service:vpn"
+  #   depends_on:
+  #     vpn:
+  #       condition: service_healthy
+  #   env_file: .env
+  #   volumes:
+  #     - ./clients/transmission/config:/config
+  #     - ./clients/transmission/downloads:/downloads
+  #     - ./clients/transmission/watch:/watch
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:9091"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 30s
+
+  # ==========================================
+  # Optional: Deluge (Web UI: http://localhost:8112)
+  # Uncomment to use Deluge instead of rTorrent
+  # Set TORRENT_CLIENT=deluge in .env
+  # ==========================================
+  # torrent:
+  #   container_name: deluge
+  #   image: lscr.io/linuxserver/deluge:latest
+  #   restart: unless-stopped
+  #   network_mode: "service:vpn"
+  #   depends_on:
+  #     vpn:
+  #       condition: service_healthy
+  #   env_file: .env
+  #   volumes:
+  #     - ./clients/deluge/config:/config
+  #     - ./clients/deluge/downloads:/downloads
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8112"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 30s
+
+  # ==========================================
+  # Optional: aria2 (Web UI: http://localhost:6800)
+  # Uncomment to use aria2 instead of rTorrent
+  # Set TORRENT_CLIENT=aria2 in .env
+  # ==========================================
+  # torrent:
+  #   container_name: aria2
+  #   image: p3terx/aria2-pro:latest
+  #   restart: unless-stopped
+  #   network_mode: "service:vpn"
+  #   depends_on:
+  #     vpn:
+  #       condition: service_healthy
+  #   env_file: .env
+  #   environment:
+  #     RPC_PORT: 6800
+  #     LISTEN_PORT: 6888
+  #   volumes:
+  #     - ./clients/aria2/config:/config
+  #     - ./clients/aria2/downloads:/downloads
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -fsSL http://localhost:6800/jsonrpc || exit 1"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 30s
+
+  vpn:
+    container_name: vpn
+    image: qmcgaw/gluetun:latest
+    restart: unless-stopped
+    networks:
+      - nginx
+    ports:
+      - 6881:6881
+      - 6881:6881/udp
+      # =======================================================================
+      # Web UI Ports - LOCALHOST ONLY (127.0.0.1) for security
+      # These are ONLY accessible from your host machine, not from network
+      # Uncomment the client you're using
+      # =======================================================================
+      # - 127.0.0.1:8080:8080    # qBittorrent Web UI (localhost only)
+      # - 127.0.0.1:9091:9091    # Transmission Web UI (localhost only)
+      # - 127.0.0.1:8112:8112    # Deluge Web UI (localhost only)
+      # - 127.0.0.1:6800:6800    # aria2 RPC (localhost only)
+      # =======================================================================
+      # Alternative: Nginx Reverse Proxy (RECOMMENDED for remote access)
+      # Configure nginx to proxy all clients through port 80 with auth
+      # See nginx configuration section below
+      # =======================================================================
+    env_file: .env
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    healthcheck:
+      test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

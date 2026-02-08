@@ -1,0 +1,56 @@
+directory.default.set = /downloads/rtorrent
+
+throttle.max_uploads.global.set = 75
+throttle.min_peers.normal.set = 30
+throttle.max_peers.normal.set = 80
+throttle.min_peers.seed.set = 8
+throttle.max_peers.seed.set = 40
+throttle.max_uploads.set = 8
+
+network.max_open_sockets.set = 2048
+network.max_open_files.set = 2048
+network.http.max_open.set = 256
+
+pieces.memory.max.set = 3072M
+
+system.file.allocate.set = 0
+system.file.max_size.set = 200G
+
+pieces.preload.type.set = 2
+pieces.preload.min_size.set = 1048576
+pieces.preload.min_rate.set = 51200
+
+pieces.hash.on_completion.set = yes
+
+pieces.sync.always_safe.set = no
+pieces.sync.timeout.set = 600
+pieces.sync.timeout_safe.set = 900
+
+protocol.encryption.set = allow_incoming,try_outgoing,enable_retry
+protocol.pex.set = yes
+trackers.use_udp.set = yes
+
+trackers.numwant.set = 100
+
+dht.mode.set = auto
+dht.port.set = 6881
+
+network.max_open_files.set = 3072
+network.tos.set = throughput
+network.max_open_sockets.set = 2048
+network.http.max_open.set = 256
+network.send_buffer.size.set = 12M
+network.receive_buffer.size.set = 12M
+network.xmlrpc.size_limit.set = 64M
+
+schedule2 = watch_directory, 5, 5, ((load.start, (cat, (cfg.watch), "*.torrent")))
+
+method.insert = d.get_finished_dir, simple, "cat=(cfg.download_complete)"
+
+schedule2 = low_diskspace, 60, 300, ((close_low_diskspace, 15000M))
+
+method.insert = d.get_ratio, simple, "math.div=d.up.total=,d.size_bytes="
+schedule2 = ratio_check, 300, 600, "stop_on_ratio=200,604800"
+
+log.open_file = "rtorrent", (cat, (cfg.logs), "rtorrent.log")
+log.add_output = "info", "rtorrent"
