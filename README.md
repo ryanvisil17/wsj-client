@@ -1,17 +1,108 @@
 # WSJ Client
 
-A Docker-based torrent automation client that searches ThePirateBay and downloads content through your choice of 5 torrent clients, all protected by VPN with kill switch.
+Automate torrent downloads from ThePirateBay with a single Docker command. Connects to your existing torrent client or deploy a complete VPN-protected stack.
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Quick Start (Existing Torrent Client)](#quick-start-existing-torrent-client)
+- [Full Stack Setup (VPN + Torrent Client)](#full-stack-setup-vpn--torrent-client)
+- [Supported Torrent Clients](#supported-torrent-clients)
+- [Switching Torrent Clients](#switching-torrent-clients)
+- [Web UI Access](#web-ui-access)
+- [VPN Providers](#vpn-providers)
+- [Usage Examples](#usage-examples)
+- [Configuration Reference](#configuration-reference)
+- [Directory Structure](#directory-structure)
+- [Troubleshooting](#troubleshooting)
+- [Security Best Practices](#security-best-practices)
+- [Maintenance](#maintenance)
+
+---
 
 ## Features
 
-- **Multi-Client Support** - Choose from rTorrent, qBittorrent, Transmission, Deluge, or aria2
-- **VPN Kill Switch** - All traffic routed through VPN (23 providers supported)
+- **Single Command Deployment** - Already have a torrent client? Add automation with one Docker command
+- **Multi-Client Support** - Works with rTorrent, qBittorrent, Transmission, Deluge, or aria2
 - **ThePirateBay Search** - Automatic torrent discovery with tracker list injection
 - **Progress Monitoring** - Real-time download status tracking
+- **Optional VPN Stack** - Full Docker Compose setup with VPN kill switch (23 providers)
 - **Security Options** - Localhost binding or nginx reverse proxy with authentication
-- **Full Docker Stack** - Complete orchestration with health checks
 
-## Architecture
+---
+
+## Quick Start (Existing Torrent Client)
+
+**Already running qBittorrent, Transmission, or another torrent client?** Just add automatic search and download with one command.
+
+### Prerequisites
+
+- Docker installed
+- Torrent client running on your machine (qBittorrent, Transmission, etc.)
+- Know your torrent client's Web UI URL, username, and password
+
+### Run Single Command
+
+```bash
+# qBittorrent example
+docker run --rm \
+  -e TORRENT_CLIENT=qbittorrent \
+  -e TORRENT_URL=http://host.docker.internal:8080 \
+  -e TORRENT_USER=admin \
+  -e TORRENT_PASSWORD=adminpass \
+  ryanvisil17/wsj-client \
+  "Wall Street Journal 2026" \
+  "Wall Street Journal Saturday February 7, 2026"
+
+# Transmission example
+docker run --rm \
+  -e TORRENT_CLIENT=transmission \
+  -e TORRENT_URL=http://host.docker.internal:9091/transmission/rpc \
+  -e TORRENT_USER=transmission \
+  -e TORRENT_PASSWORD=transmission \
+  ryanvisil17/wsj-client \
+  "Wall Street Journal 2026" \
+  "Wall Street Journal Saturday February 7, 2026"
+
+# rTorrent example
+docker run --rm \
+  -e TORRENT_CLIENT=rtorrent \
+  -e TORRENT_URL=http://host.docker.internal:8080/plugins/httprpc/action.php \
+  -e TORRENT_USER=admin \
+  -e TORRENT_PASSWORD=password \
+  ryanvisil17/wsj-client \
+  "Wall Street Journal 2026" \
+  "Wall Street Journal Saturday February 7, 2026"
+```
+
+**That's it!** The script will:
+
+1. Search ThePirateBay for your query
+2. Find the exact torrent name match
+3. Add it to your running torrent client
+4. Monitor download progress
+5. Exit when complete
+
+### Environment Variables
+
+| Variable           | Description                 | Example                                   |
+| ------------------ | --------------------------- | ----------------------------------------- |
+| `TORRENT_CLIENT`   | Client type                 | `qbittorrent`, `transmission`, `rtorrent` |
+| `TORRENT_URL`      | Web UI or API endpoint      | `http://localhost:8080`                   |
+| `TORRENT_USER`     | Username for authentication | `admin`                                   |
+| `TORRENT_PASSWORD` | Password for authentication | `yourpassword`                            |
+
+**Note:** Windows users need Docker Desktop or Docker Engine backend, or run from Powershell directly.
+
+---
+
+## Full Stack Setup (VPN + Torrent Client)
+
+Want a complete solution with VPN protection and torrent client included? Deploy the full stack with Docker Compose.
+
+### Architecture
 
 ```
 ┌──────────┐     ┌────────┐     ┌─────────┐     ┌──────────────┐
@@ -24,17 +115,7 @@ A Docker-based torrent automation client that searches ThePirateBay and download
 
 All torrent clients share the VPN network namespace. **If VPN fails, clients lose all connectivity** (kill switch protection).
 
-## Supported Clients
-
-| Client           | Protocol     | Web UI Port | RAM Usage | Best For            |
-| ---------------- | ------------ | ----------- | --------- | ------------------- |
-| **rTorrent**     | XML-RPC      | 80 (nginx)  | 50-100MB  | Low resources       |
-| **qBittorrent**  | REST API     | 8080        | 150-300MB | Modern UI, features |
-| **Transmission** | JSON-RPC     | 9091        | 50-150MB  | Simplicity          |
-| **Deluge**       | JSON-RPC     | 8112        | 100-200MB | Plugins             |
-| **aria2**        | JSON-RPC 2.0 | 6800        | 20-50MB   | Speed, efficiency   |
-
-## Requirements
+### Requirements
 
 - Docker Engine 20.10+
 - Docker Compose v2.0+
@@ -42,10 +123,9 @@ All torrent clients share the VPN network namespace. **If VPN fails, clients los
 - 1GB RAM minimum (2GB recommended for qBittorrent)
 - Linux/macOS (Windows via WSL2)
 
+### Setup Steps
 
-## Quick Start
-
-### 1. Clone and Configure
+#### 1. Clone and Configure
 
 ```bash
 # HTTPS
@@ -58,7 +138,7 @@ cd wsj-client
 cp .env.example .env
 ```
 
-### 2. Set VPN Credentials
+#### 2. Set VPN Credentials
 
 Edit `.env` with your VPN provider credentials:
 
@@ -77,7 +157,7 @@ TZ=America/New_York
 
 See [`docs/`](docs/) directory for your provider's setup guide (23 providers supported).
 
-### 3. Configure Nginx
+#### 3. Configure Nginx (Optional)
 
 **Option A: Basic setup (no authentication)**
 
@@ -89,17 +169,20 @@ The default `nginx/nginx.conf` works out of the box for rTorrent.
 # Generate password file
 docker run --rm httpd:alpine htpasswd -Bbn admin yourpassword > nginx/.htpasswd
 
-# Edit nginx/nginx.conf and uncomment the auth lines:
-auth_basic "Torrent Clients";
-auth_basic_user_file /etc/nginx/.htpasswd;
+# Edit nginx/nginx.conf and uncomment the auth lines (around line 56-57):
+# auth_basic "Torrent Clients";
+# auth_basic_user_file /etc/nginx/.htpasswd;
 
-# Mount password file in docker-compose.yml nginx service:
+# Add .htpasswd volume mount in docker-compose.yml nginx service:
 volumes:
   - ./nginx/nginx.conf:/etc/nginx/nginx.conf
-  - ./nginx/.htpasswd:/etc/nginx/.htpasswd
+  - ./nginx/.htpasswd:/etc/nginx/.htpasswd  # Add this line
+
+# Restart nginx
+docker compose restart nginx
 ```
 
-### 4. Start Services
+#### 4. Start Services
 
 Start nginx, which will automatically start the torrent client and VPN (via `depends_on`):
 
@@ -110,7 +193,7 @@ docker compose up -d nginx
 docker compose exec vpn wget -qO- https://ipinfo.io/ip
 ```
 
-### 5. Access Web UI
+#### 5. Access Web UI
 
 **Default (rTorrent):**
 
@@ -120,7 +203,7 @@ docker compose exec vpn wget -qO- https://ipinfo.io/ip
 
 - See [Web UI Access](#web-ui-access) section below
 
-### 6. Run Torrent Downloads
+#### 6. Run Torrent Downloads
 
 The `wsj` service runs separately to download torrents:
 
@@ -135,11 +218,33 @@ docker compose up -d wsj
 docker compose logs wsj -f
 ```
 
+---
+
+## Supported Torrent Clients
+
+| Client           | Protocol     | Internal Port | RAM Usage | Best For            | API Endpoint (Single Command)                      |
+| ---------------- | ------------ | ------------- | --------- | ------------------- | -------------------------------------------------- |
+| **rTorrent**     | XML-RPC      | 8080          | 50-100MB  | Low resources       | `http://localhost:8080/plugins/httprpc/action.php` |
+| **qBittorrent**  | REST API     | 8080          | 150-300MB | Modern UI, features | `http://localhost:8080`                            |
+| **Transmission** | JSON-RPC     | 9091          | 50-150MB  | Simplicity          | `http://localhost:9091/transmission/rpc`           |
+| **Deluge**       | JSON-RPC     | 8112          | 100-200MB | Plugins             | `http://localhost:8112/json`                       |
+| **aria2**        | JSON-RPC 2.0 | 6800          | 20-50MB   | Speed, efficiency   | `http://localhost:6800/jsonrpc`                    |
+
+**Notes:**
+- **Internal Port**: Port the client uses inside its container
+- **API Endpoint**: For single command usage with existing clients on localhost
+- **Docker Compose**: All clients accessed via nginx at http://localhost/ or via VPN container ports
+- **For Docker Compose URLs**: Replace `localhost` with `vpn` (e.g., `http://vpn:8080`)
+
+---
+
 ## Switching Torrent Clients
 
-To use a different torrent client, you must edit **three** configuration files:
+### For Docker Compose Stack
 
-### Step 1: Edit `.env`
+To use a different torrent client in the full stack, edit **three** configuration files:
+
+#### Step 1: Edit `.env`
 
 ```bash
 # Change client selection
@@ -148,7 +253,7 @@ TORRENT_CLIENT=qbittorrent  # or transmission, deluge, aria2
 # Change API endpoint URL (uncomment the correct one)
 TORRENT_URL=http://vpn:8080  # qBittorrent
 # TORRENT_URL=http://vpn:9091/transmission/rpc  # Transmission
-# TORRENT_URL=http://vpn:8112  # Deluge
+# TORRENT_URL=http://vpn:8112/json  # Deluge
 # TORRENT_URL=http://vpn:6800/jsonrpc  # aria2
 
 # Set credentials for your chosen client
@@ -156,7 +261,7 @@ TORRENT_USER=admin
 TORRENT_PASSWORD=yourpassword
 ```
 
-### Step 2: Edit `docker-compose.yml`
+#### Step 2: Edit `docker-compose.yml`
 
 Comment out the current client and uncomment your preferred one. All clients use the service name `torrent`:
 
@@ -174,45 +279,66 @@ torrent:
   ...
 ```
 
-### Step 3: Edit `nginx/nginx.conf`
+#### Step 3: Edit `nginx/nginx.conf`
 
-Update the upstream and proxy_pass for your client:
+Comment out the current client's location block and uncomment your preferred client:
 
 ```nginx
-# Comment out current client
-# upstream rtorrent {
-#   server vpn:8000;
+# Comment out rTorrent location block (lines 67-80)
+# location / {
+#   proxy_pass http://vpn:8080/;
+#   ...
+# }
+#
+# location /RPC2 {
+#   include scgi_params;
+#   scgi_pass vpn:18000;
+#   ...
 # }
 
-# Uncomment your preferred client
-upstream qbittorrent {
-  server vpn:8080;
-}
-
+# Uncomment qBittorrent location block (lines 86-89)
 location / {
-  proxy_pass http://qbittorrent;
-  ...
+  proxy_pass http://vpn:8080/;
+  proxy_http_version 1.1;
 }
 ```
 
-### Step 4: Restart
+**Note:** Only ONE client can be active at a time since they all serve at the root path `/`.
+
+#### Step 4: Restart
 
 ```bash
 docker compose down
 docker compose up -d nginx
 ```
 
+### For Single Docker Command
+
+Just change the environment variables:
+
+```bash
+docker run --rm \
+  --network host \
+  -e TORRENT_CLIENT=transmission \
+  -e TORRENT_URL=http://localhost:9091/transmission/rpc \
+  -e TORRENT_USER=transmission \
+  -e TORRENT_PASSWORD=transmission \
+  ryanvisil17/wsj-client \
+  "Your Search Query" \
+  "Exact Torrent Name"
+```
+
+---
+
 ## Web UI Access
 
-### Option 1: Nginx Reverse Proxy (Default)
+### Option 1: Nginx Reverse Proxy (Default for Docker Compose)
 
-All clients are accessible through nginx on port 80:
+The active torrent client is accessible through nginx on port 80:
 
-- **rTorrent**: http://localhost/
-- **qBittorrent**: http://localhost/qbittorrent/
-- **Transmission**: http://localhost/transmission/
-- **Deluge**: http://localhost/deluge/
-- **aria2**: http://localhost/aria2/
+- **Any Active Client**: http://localhost/
+
+**Note:** Only one client can be active at a time through nginx since all clients serve at the root path. The active client is determined by which service is uncommented in both `docker-compose.yml` and `nginx/nginx.conf`.
 
 **Enable Authentication:**
 
@@ -220,14 +346,13 @@ All clients are accessible through nginx on port 80:
 # Generate password file
 docker run --rm httpd:alpine htpasswd -Bbn admin yourpassword > nginx/.htpasswd
 
-# Update docker-compose.yml to mount it
-volumes:
-  - ./nginx/nginx.conf:/etc/nginx/nginx.conf
-  - ./nginx/.htpasswd:/etc/nginx/.htpasswd
-
-# Edit nginx.conf and uncomment auth lines:
+# The password file is already mounted in docker-compose.yml
+# Just uncomment the auth lines in nginx/nginx.conf:
 auth_basic "Torrent Clients";
 auth_basic_user_file /etc/nginx/.htpasswd;
+
+# Restart nginx
+docker compose restart nginx
 ```
 
 ### Option 2: Direct Port Access (Localhost Only)
@@ -243,7 +368,9 @@ vpn:
     # - 127.0.0.1:6800:6800  # aria2
 ```
 
-** Security:** Always bind to `127.0.0.1` for localhost-only access. Never expose ports as `8080:8080` without authentication.
+**Security Warning:** Always bind to `127.0.0.1` for localhost-only access. Never expose ports as `8080:8080` without authentication.
+
+---
 
 ## VPN Providers
 
@@ -260,9 +387,26 @@ vpn:
 
 See [`docs/`](docs/) directory for detailed setup guides.
 
-## Usage
+---
 
-### Via Docker Compose
+## Usage Examples
+
+### Single Docker Command with Existing Client
+
+```bash
+# Download today's Wall Street Journal
+docker run --rm \
+  --network host \
+  -e TORRENT_CLIENT=qbittorrent \
+  -e TORRENT_URL=http://localhost:8080 \
+  -e TORRENT_USER=admin \
+  -e TORRENT_PASSWORD=adminpass \
+  ryanvisil17/wsj-client \
+  "Wall Street Journal $(date +%Y)" \
+  "Wall Street Journal $(date +%A %B %-d, %Y)"
+```
+
+### Docker Compose Stack
 
 Edit the command in `docker-compose.yml`:
 
@@ -283,7 +427,7 @@ docker compose up -d wsj
 docker compose logs wsj -f
 ```
 
-### Standalone Script
+### Standalone Python Script
 
 ```bash
 python main.py "Search Query" "Exact Torrent Name"
@@ -306,6 +450,66 @@ Options:
   --timeout             Download timeout in seconds (default: 3600)
 ```
 
+### Schedule Daily Downloads
+
+```bash
+# Add to crontab
+crontab -e
+
+# Download every day at 6 AM using single command
+0 6 * * * docker run --rm --network host -e TORRENT_CLIENT=qbittorrent -e TORRENT_URL=http://localhost:8080 -e TORRENT_USER=admin -e TORRENT_PASSWORD=pass ryanvisil17/wsj-client "WSJ $(date +%Y)" "WSJ $(date +%A %B %-d, %Y)" >> /var/log/wsj.log 2>&1
+
+# OR with docker compose
+0 6 * * * cd /path/to/wsj-client && docker compose up -d wsj >> /var/log/wsj-client.log 2>&1
+```
+
+---
+
+## Configuration Reference
+
+### Environment Variables
+
+```bash
+# Client Selection
+TORRENT_CLIENT=rtorrent           # rtorrent | qbittorrent | transmission | deluge | aria2
+
+# API Endpoints (choose one matching your client)
+TORRENT_URL=http://vpn:8080/plugins/httprpc/action.php  # rTorrent
+# TORRENT_URL=http://vpn:8080                            # qBittorrent
+# TORRENT_URL=http://vpn:9091/transmission/rpc           # Transmission
+# TORRENT_URL=http://vpn:8112/json                       # Deluge
+# TORRENT_URL=http://vpn:6800/jsonrpc                    # aria2
+
+# Client Credentials
+TORRENT_USER=admin
+TORRENT_PASSWORD=password
+
+# System (for Docker Compose stack)
+PUID=1000                         # User ID (run: id -u)
+PGID=1000                         # Group ID (run: id -g)
+TZ=America/New_York
+
+# VPN Provider (for Docker Compose stack)
+VPN_SERVICE_PROVIDER=nordvpn      # See docs/ for your provider
+VPN_TYPE=wireguard                # wireguard | openvpn
+SERVER_COUNTRIES=United States
+SERVER_CATEGORIES=P2P
+
+# VPN Credentials (provider-specific, see docs/)
+NORDVPN_TOKEN=your_token
+WIREGUARD_PRIVATE_KEY=your_key
+# OR
+OPENVPN_USER=your_username
+OPENVPN_PASSWORD=your_password
+
+# Network (for Docker Compose stack)
+FIREWALL_OUTBOUND_SUBNETS=192.168.1.0/24
+DNS_SERVER=on
+DNS_UPSTREAM_RESOLVERS=cloudflare
+```
+
+---
+
 ## Directory Structure
 
 ```
@@ -323,7 +527,7 @@ wsj-client/
 │   ├── nordvpn-setup.md
 │   ├── mullvad-setup.md
 │   └── ...
-└── clients/                 # Auto-created on first run
+└── clients/                 # Auto-created on first run (Docker Compose only)
     ├── rtorrent/
     │   ├── data/
     │   ├── downloads/
@@ -343,50 +547,11 @@ wsj-client/
         └── downloads/
 ```
 
-## Configuration Reference
-
-### Environment Variables (`.env`)
-
-```bash
-# Torrent Client
-TORRENT_CLIENT=rtorrent           # rtorrent | qbittorrent | transmission | deluge | aria2
-
-# VPN Provider
-VPN_SERVICE_PROVIDER=nordvpn      # See docs/ for your provider
-VPN_TYPE=wireguard                # wireguard | openvpn
-SERVER_COUNTRIES=United States
-SERVER_CATEGORIES=P2P
-
-# VPN Credentials (provider-specific)
-NORDVPN_TOKEN=your_token
-WIREGUARD_PRIVATE_KEY=your_key
-# OR
-OPENVPN_USER=your_username
-OPENVPN_PASSWORD=your_password
-
-# Client Credentials
-RTORRENT_USER=admin               # For rTorrent
-RTORRENT_PASSWORD=password
-# OR
-TORRENT_USER=admin                # For qBittorrent, Transmission, Deluge
-TORRENT_PASSWORD=password
-# OR
-RPC_SECRET=your_secret            # For aria2
-
-# System
-PUID=1000                         # User ID (run: id -u)
-PGID=1000                         # Group ID (run: id -g)
-TZ=America/New_York
-
-# Network
-FIREWALL_OUTBOUND_SUBNETS=192.168.1.0/24
-DNS_SERVER=on
-DNS_UPSTREAM_RESOLVERS=cloudflare
-```
+---
 
 ## Troubleshooting
 
-### VPN Not Connecting
+### VPN Not Connecting (Docker Compose Only)
 
 ```bash
 # Check VPN logs
@@ -405,34 +570,48 @@ docker compose restart vpn
 ### Torrent Client Not Accessible
 
 ```bash
-# Check if client is running
+# For Docker Compose stack
 docker compose ps
-
-# Verify client is using VPN IP
 docker compose exec torrent wget -qO- https://ipinfo.io/ip
-
-# Check client logs
 docker compose logs torrent
 
-# Test connectivity from wsj container
-docker compose exec wsj curl -v http://vpn:8080
+# For single command (check your local torrent client)
+# Make sure qBittorrent/Transmission is running
+# Verify Web UI is accessible: http://localhost:8080
+```
+
+### Connection Errors with Single Command
+
+```bash
+# Verify your torrent client is running
+curl http://localhost:8080  # qBittorrent
+curl http://localhost:9091  # Transmission
+
+# Check credentials
+# qBittorrent: Tools -> Options -> Web UI
+# Transmission: settings.json
+
+# Test with --network host
+docker run --rm --network host -e ... ryanvisil17/wsj-client ...
+
+# Windows: Ensure Docker Desktop is using WSL2 backend
 ```
 
 ### Download Stuck at 0%
 
 ```bash
-# Verify VPN connectivity
+# For Docker Compose stack
 docker compose exec vpn ping -c 3 8.8.8.8
-
-# Check if kill switch is blocking (expected behavior if VPN down)
 docker compose exec vpn iptables -L -n -v
-
-# Restart entire stack
 docker compose down
 docker compose up -d nginx
+
+# For single command
+# Check your torrent client's connection status
+# Ensure torrents are actually downloading in the client
 ```
 
-### Permission Errors
+### Permission Errors (Docker Compose Only)
 
 ```bash
 # Fix ownership of client directories
@@ -443,43 +622,7 @@ id -u  # Should match PUID in .env
 id -g  # Should match PGID in .env
 ```
 
-## Examples
-
-### Download Today's Wall Street Journal
-
-```bash
-# Using current date
-python main.py "Wall Street Journal $(date +%Y)" \
-               "Wall Street Journal $(date +%A %B %-d, %Y)"
-```
-
-### Schedule Daily Downloads
-
-```bash
-# Add to crontab
-crontab -e
-
-# Download every day at 6 AM
-0 6 * * * cd /path/to/wsj-client && docker compose up -d wsj >> /var/log/wsj-client.log 2>&1
-```
-
-### Switch to qBittorrent
-
-```bash
-# 1. Stop services
-docker compose down
-
-# 2. Edit .env
-sed -i 's/TORRENT_CLIENT=.*/TORRENT_CLIENT=qbittorrent/' .env
-
-# 3. Edit docker-compose.yml (comment rtorrent, uncomment qbittorrent)
-# 4. Edit nginx/nginx.conf (comment rtorrent upstream, uncomment qbittorrent)
-
-# 5. Start with new client
-docker compose up -d nginx
-
-# 6. Access at http://localhost:8080 (or http://localhost/qbittorrent/ via nginx)
-```
+---
 
 ## Security Best Practices
 
@@ -495,7 +638,7 @@ docker compose up -d nginx
    openssl rand -base64 32
    ```
 
-3. **Enable HTTPS** with Let's Encrypt:
+3. **Enable HTTPS** with Let's Encrypt (Docker Compose only):
 
    ```bash
    sudo certbot certonly --standalone -d yourdomain.com
@@ -514,11 +657,19 @@ docker compose up -d nginx
 
 5. **Never expose ports without** `127.0.0.1` binding unless using nginx with authentication
 
+6. **Single command users**: Don't expose your torrent client to the internet without authentication
+
+---
+
 ## Maintenance
 
-### Update Containers
+### Update Docker Image
 
 ```bash
+# Pull latest image
+docker pull ryanvisil17/wsj-client:latest
+
+# For Docker Compose stack
 docker compose pull
 docker compose up -d nginx --force-recreate
 ```
@@ -526,13 +677,12 @@ docker compose up -d nginx --force-recreate
 ### View Logs
 
 ```bash
-# All services
+# Single command (runs in foreground by default)
+docker run --rm ... ryanvisil17/wsj-client ...
+
+# Docker Compose
 docker compose logs -f
-
-# Specific service
 docker compose logs -f vpn
-
-# Last 50 lines
 docker compose logs --tail=50 wsj
 ```
 
@@ -545,10 +695,18 @@ tar -czf wsj-client-backup.tar.gz .env docker-compose.yml nginx/
 ### Clean Downloads
 
 ```bash
-# Remove all downloaded files
+# Docker Compose
 rm -rf clients/*/downloads/*
+
+# Single command (clean your torrent client's download folder)
 ```
+
+---
 
 ## License
 
 MIT License - For personal and educational use only.
+
+## Disclaimer
+
+This tool is for downloading legally available content only. Users are responsible for complying with their local laws and the terms of service of their VPN provider. The authors assume no liability for misuse.
