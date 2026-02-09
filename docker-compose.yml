@@ -41,7 +41,7 @@ services:
     command:
       [
         "Wall Street Journal 2026",
-        "Wall Street Journal Saturday February 7, 2026",
+        "Wall Street Journal Friday February 6, 2026",
       ]
 
   # ===================================================================================
@@ -87,9 +87,9 @@ services:
       - SETUID
       - NET_BIND_SERVICE
     healthcheck:
-      test: ["CMD-SHELL", "nginx -t && kill -0 $(cat /tmp/nginx.pid)"]
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/health"]
       interval: 10s
-      timeout: 10s
+      timeout: 3s
       retries: 6
       start_period: 10s
 
@@ -105,8 +105,10 @@ services:
     depends_on:
       vpn:
         condition: service_healthy
-    env_file: .env
     environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: America/New_York
       RT_LOG_LEVEL: info
       MEMORY_LIMIT: 768M
       XMLRPC_PORT: 18000
@@ -119,12 +121,6 @@ services:
       nofile:
         soft: 65536
         hard: 65536
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
 
   # ==========================================
   # Optional: qBittorrent (Web UI: http://localhost:8080)
@@ -218,11 +214,16 @@ services:
   #   environment:
   #     RPC_PORT: 6800
   #     LISTEN_PORT: 6888
+  #     RPC_SECRET: ${TORRENT_PASSWORD}
   #   volumes:
   #     - ./clients/aria2/config:/config
   #     - ./clients/aria2/downloads:/downloads
   #   healthcheck:
-  #     test: ["CMD-SHELL", "curl -fsSL http://localhost:6800/jsonrpc || exit 1"]
+  #     test:
+  #       [
+  #         "CMD-SHELL",
+  #         "curl -fsS -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":\"hc\",\"method\":\"aria2.getVersion\",\"params\":[\"token:${TORRENT_PASSWORD}\"]}' http://localhost:6800/jsonrpc | grep -q '\"result\"'"
+  #       ]
   #     interval: 30s
   #     timeout: 10s
   #     retries: 3

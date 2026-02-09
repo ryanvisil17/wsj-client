@@ -689,24 +689,37 @@ class DelugeClient(TorrentClient):
                 "Deluge requires TORRENT_PASSWORD (default: 'deluge')"
             )
 
+        try:
+            result = self._execute_rpc("auth.check_session", [])
+            if result:
+                return
+        except Exception:
+            pass
+
         result = self._execute_rpc("auth.login", [self.password])
         if not result:
             raise RuntimeError("Deluge authentication failed")
+        
+        hosts = self._execute_rpc("web.get_hosts", [])
+        if hosts and len(hosts) > 0:
+            host_id = hosts[0][0]
+            self._execute_rpc("web.connect", [host_id])
 
     def add_magnet_link(self, magnet_link: str) -> TorrentHandle:
         info_hash = extract_info_hash_from_magnet(magnet_link)
         if not info_hash:
             raise RuntimeError("Failed to extract info hash from magnet link")
 
-        result_hash = self._execute_rpc(
-            "core.add_torrent_magnet", [magnet_link, {}]
+        result = self._execute_rpc(
+            "web.add_torrents", 
+            [[{"path": magnet_link, "options": {}}]]
         )
 
-        if not result_hash:
-            raise RuntimeError("Deluge add_torrent_magnet returned None")
+        if not result or not result[0]:
+            raise RuntimeError("Deluge add_torrents failed")
 
         print("  Successfully added magnet to Deluge")
-        return TorrentHandle(handle_id=result_hash)
+        return TorrentHandle(handle_id=info_hash.lower())
 
     def get_torrent_status(self, handle: TorrentHandle) -> TorrentStatus:
         fields = [
@@ -920,20 +933,18 @@ def main() -> None:
         "--torrent-url",
         default=os.getenv(
             "TORRENT_URL",
-            os.getenv(
-                "RTORRENT_URL", "http://vpn:8080/plugins/httprpc/action.php"
-            ),
+            "http://vpn:8080/plugins/httprpc/action.php"
         ),
         help="Backend URL (varies by client type)",
     )
     parser.add_argument(
         "--torrent-user",
-        default=os.getenv("TORRENT_USER", os.getenv("RTORRENT_USER")),
+        default=os.getenv("TORRENT_USER", "admin"),
         help="Backend username (if required)",
     )
     parser.add_argument(
         "--torrent-password",
-        default=os.getenv("TORRENT_PASSWORD", os.getenv("RTORRENT_PASSWORD")),
+        default=os.getenv("TORRENT_PASSWORD", "password"),
         help="Backend password/token (if required)",
     )
     parser.add_argument(
